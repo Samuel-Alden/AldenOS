@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>AldenOS 2.0</title>
+  <link rel="stylesheet" href="aero.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- CRT power-on flash (one-shot, vanilla, drawn before React mounts) -->
+  <div id="power-flash" aria-hidden="true"></div>
+
+  <!-- BIOS POST screen — vanilla so it renders instantly -->
+  <div id="bios" role="status" aria-live="polite">
+    <div class="crt" aria-hidden="true"></div>
+    <div class="bios-head">
+      <div class="logo">AldenBIOS&nbsp;v2.0</div>
+      <div>© 2026 Alden Systems &nbsp;|&nbsp; Press <span style="color:#5cb6ff">DEL</span> to enter setup</div>
+    </div>
+    <div class="bios-body" id="bios-body"></div>
+    <div class="bios-footer">
+      <span>F1: Help</span>
+      <span>F2: Boot Menu</span>
+      <span>F10: Save &amp; Exit</span>
+      <span style="margin-left:auto; color:#5cb6ff">Booting AldenOS&hellip;</span>
+    </div>
+  </div>
+
+  <!-- OS root -->
+  <div id="stage" aria-hidden="true">
+    <!-- React will fill this -->
+    <div id="root"></div>
+  </div>
+
+  <!-- React + Babel -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <!-- ===== BIOS / POST sequence (vanilla, runs immediately) ===== -->
+  <script>
+    (function bios() {
+      const SKIP = sessionStorage.getItem('aldenos.bootDone') === '1';
+      const body = document.getElementById('bios-body');
+      const bios = document.getElementById('bios');
+      const stage = document.getElementById('stage');
+
+      function showOS() {
+        bios.classList.add('fading');
+        setTimeout(() => {
+          bios.style.display = 'none';
+          stage.removeAttribute('aria-hidden');
+          sessionStorage.setItem('aldenos.bootDone', '1');
+          window.dispatchEvent(new CustomEvent('aldenos:boot-complete'));
+        }, 800);
+      }
+
+      if (SKIP) {
+        // already booted this session — skip the whole thing
+        bios.style.display = 'none';
+        stage.removeAttribute('aria-hidden');
+        document.getElementById('power-flash').style.display = 'none';
+        window.addEventListener('DOMContentLoaded', () => {
+          window.dispatchEvent(new CustomEvent('aldenos:boot-complete'));
+        });
+        return;
+      }
+
+      const LINES = [
+        { txt: 'CPU: Alden Pentium III @ 700 MHz', ok: true, d: 180 },
+        { txt: 'Memory test: 524,288 KB OK', ok: true, d: 240 },
+        { txt: 'Detecting IDE drives...', d: 200 },
+        { txt: '  Primary Master  : ALDEN-HDD-40GB', ok: true, d: 160 },
+        { txt: '  Secondary Master: CD-ROM ASUS 52x', ok: true, d: 160 },
+        { txt: 'PnP devices configured', ok: true, d: 200 },
+        { txt: 'Modem found: USRobotics 56K v.92', ok: true, d: 220 },
+        { txt: 'Loading AldenOS bootloader...', d: 260 },
+      ];
+
+      let i = 0;
+      function nextLine() {
+        if (i >= LINES.length) return loadingBar();
+        const line = LINES[i++];
+        const row = document.createElement('div');
+        row.className = 'bios-line';
+        row.innerHTML = `<span class="label">${line.txt}</span>` +
+                        (line.ok ? ' <span class="ok">[ OK ]</span>' : '');
+        body.appendChild(row);
+        setTimeout(nextLine, line.d);
+      }
+
+      function loadingBar() {
+        const wrap = document.createElement('div');
+        wrap.innerHTML = '<div style="margin-top:12px">Starting AldenOS<span class="blink"></span></div>' +
+                         '<div class="bios-loader"><i id="bios-bar"></i></div>';
+        body.appendChild(wrap);
+        let p = 0;
+        const bar = document.getElementById('bios-bar');
+        const t = setInterval(() => {
+          p += 4 + Math.random() * 6;
+          if (p >= 100) { p = 100; clearInterval(t); setTimeout(showOS, 380); }
+          bar.style.width = p + '%';
+        }, 90);
+      }
+
+      // start after the CRT flash
+      setTimeout(nextLine, 500);
+    })();
+  </script>
+
+  <!-- ===== App code ===== -->
+  <script type="text/babel" src="os.jsx"></script>
+  <script type="text/babel" src="icons.jsx"></script>
+  <script type="text/babel" src="desktop-jazz.jsx"></script>
+  <script type="text/babel" src="apps-core.jsx"></script>
+  <script type="text/babel" src="apps-fun.jsx"></script>
+  <script type="text/babel" src="boot.jsx"></script>
+</body>
+</html>
